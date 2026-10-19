@@ -37,6 +37,7 @@ def main() -> int:
     args = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile", "--windowed",
+        "--splash", str(ROOT / "assets" / "splash.png"),
         "--name", a.name,
         "--paths", str(ROOT),
         "--add-data", "%s;mjd" % (ROOT / "mjd" / "digit_bank.npz"),

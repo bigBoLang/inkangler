@@ -305,9 +305,11 @@ class App:
             exe, params, workdir = str(sys.executable), None, str(ROOT)
         else:
             exe, params, workdir = sys.executable, '"%s"' % Path(__file__).resolve(), str(ROOT)
+        _release_instance()                # 先交还单实例锁，否则新进程会被挡住
         rc = ctypes.windll.shell32.ShellExecuteW(
             None, "runas", exe, params, workdir, 1)
         if rc <= 32:                       # 0 = 失败, 5 = 用户取消 UAC
+            _single_instance()             # 没起来，把锁拿回来
             self._log("提权失败或被取消（ShellExecute 返回 %d）。" % rc)
             return
         self._log("已用管理员身份重新启动，本窗口关闭。")
@@ -592,19 +594,94 @@ def _license_gate(root: tk.Tk, reason: str) -> tuple[bool, str]:
     return res["ok"], res["msg"]
 
 
+# ---------------------------------------------------------------- 单实例 / 闪屏
+_MUTEX: int | None = None
+TITLE_PREFIX = "墨迹大侠 · 自动钓鱼"
+
+
+def _focus_existing() -> None:
+    """把已经在跑的那个窗口叫到前面（跨权限失败也不报错）。"""
+    user32 = ctypes.windll.user32
+    found: list[int] = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def cb(hwnd, _lparam):
+        n = user32.GetWindowTextLengthW(hwnd)
+        if n > 0:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            user32.GetWindowTextW(hwnd, buf, n + 1)
+            if buf.value.startswith(TITLE_PREFIX):
+                found.append(hwnd)
+        return True
+
+    user32.EnumWindows(cb, 0)
+    if found:
+        user32.ShowWindow(found[0], 9)          # SW_RESTORE
+        user32.SetForegroundWindow(found[0])
+
+
+def _single_instance() -> bool:
+    """第一次运行返回 True；已经有实例在跑就叫它到前面并返回 False。"""
+    global _MUTEX
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateMutexW.restype = ctypes.c_void_p
+    k32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_wchar_p]
+    h = k32.CreateMutexW(None, False, "Local\\inkangler-auto-fish")
+    if not h:                                    # 拿不到锁就别拦着用户
+        return True
+    if ctypes.get_last_error() == 183:           # ERROR_ALREADY_EXISTS
+        k32.CloseHandle(h)
+        _focus_existing()
+        return False
+    _MUTEX = h
+    return True
+
+
+def _release_instance() -> None:
+    """提权重启前必须先松手，否则新进程会被自己的锁挡在门外。"""
+    global _MUTEX
+    if _MUTEX:
+        ctypes.windll.kernel32.CloseHandle(_MUTEX)
+        _MUTEX = None
+
+
+def _close_splash() -> None:
+    """关掉 PyInstaller 的启动闪屏（源码直接跑时没有这个模块）。"""
+    try:
+        import pyi_splash                      # type: ignore[import-not-found]
+        pyi_splash.close()
+    except Exception:                          # noqa: BLE001
+        pass
+
+
 def main() -> int:
-    root = tk.Tk()
-    root.withdraw()
-    ok, msg, _owner = lic.check(ROOT)
-    if not ok:
-        ok, msg = _license_gate(root, msg)
+    # 单实例：双击第二次时直接提示，避免出现两个窗口、两个激活框
+    if not _single_instance():
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            "程序已经在运行了，不用再点一次。\n\n"
+            "窗口可能被别的程序挡住了，按 Alt+Tab 找一下。",
+            TITLE_PREFIX, 0x40)                # MB_ICONINFORMATION
+        return 0
+
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        ok, msg, _owner = lic.check(ROOT)
         if not ok:
-            root.destroy()
-            return 3
-    root.deiconify()
-    App(root, auth=msg)
-    root.mainloop()
-    return 0
+            _close_splash()                    # 先把闪屏撤掉，别盖住激活窗
+            ok, msg = _license_gate(root, msg)
+            if not ok:
+                root.destroy()
+                return 3
+        root.deiconify()
+        App(root, auth=msg)
+        root.update()                          # 先画出主窗口，再撤闪屏，中间不闪白
+        _close_splash()
+        root.mainloop()
+        return 0
+    finally:
+        _close_splash()                        # 任何异常路径都不留悬空闪屏
 
 
 if __name__ == "__main__":
