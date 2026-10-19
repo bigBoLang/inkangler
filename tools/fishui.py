@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from mjd import hook, sell, win  # noqa: E402
 from mjd import license as lic  # noqa: E402
-from mjd.version import APP_NAME, VERSION  # noqa: E402
+from mjd.version import APP_NAME, AUTHOR, NOTICE, VERSION  # noqa: E402
 
 def _app_dir() -> Path:
     """配置文件/日志/截图放哪儿。
@@ -222,7 +222,9 @@ class App:
 
         ttk.Label(top, foreground="#7a8296", justify="left", wraplength=520,
                   text="提示：先在游戏里停在钓鱼界面，再点「开始」；"
-                       "运行中不抢鼠标和焦点，可以照常用电脑。").pack(fill="x", pady=(0, 4))
+                       "运行中不抢鼠标和焦点，可以照常用电脑。").pack(fill="x", pady=(0, 2))
+        ttk.Label(top, foreground="#9a5050", justify="left", wraplength=520,
+                  text="作者：%s　·　%s" % (AUTHOR, NOTICE)).pack(fill="x", pady=(0, 4))
 
         # 日志
         box4 = ttk.LabelFrame(r, text=" 日志 ")
@@ -238,6 +240,7 @@ class App:
             self._log(self.auth)
         self._log("%s v%s · %s" % (APP_NAME, VERSION,
                                    "已授权" if self.auth else "未授权"))
+        self._log("作者 %s · %s" % (AUTHOR, NOTICE))
         self._log("准备就绪。先在游戏里停在钓鱼界面，再点「开始」。")
 
     # ---------------------------------------------------------------- 小工具
@@ -334,14 +337,14 @@ class App:
 
         win = tk.Toplevel(self.root)
         win.title("关于 · " + APP_NAME)
-        win.geometry("540x430")
+        win.geometry("540x480")
         win.resizable(False, False)
         win.transient(self.root)
         f = ("Microsoft YaHei UI", 10)
 
         tk.Label(win, text=APP_NAME,
                  font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=16, pady=(16, 0))
-        tk.Label(win, text="v%s   ·   inkangler" % VERSION,
+        tk.Label(win, text="v%s   ·   inkangler   ·   作者 %s" % (VERSION, AUTHOR),
                  foreground="#3d7bfd", font=f).pack(anchor="w", padx=16)
         tk.Label(win, text=line, font=f, justify="left", wraplength=500).pack(
             anchor="w", padx=16, pady=(10, 0))
@@ -358,6 +361,9 @@ class App:
                 "5. 「鱼币」所有鱼都卖，抛竿默认满力。")
         tk.Label(win, text=tips, font=f, justify="left", wraplength=500,
                  foreground="#333").pack(anchor="w", padx=16, pady=(12, 0))
+        tk.Label(win, text="作者 %s　·　%s" % (AUTHOR, NOTICE),
+                 font=("Microsoft YaHei UI", 9), justify="left", wraplength=500,
+                 foreground="#9a5050").pack(anchor="w", padx=16, pady=(12, 0))
 
         def copy_all() -> None:
             win.clipboard_clear()
@@ -558,6 +564,10 @@ def _license_gate(root: tk.Tk, reason: str) -> tuple[bool, str]:
 
     tip = tk.Label(dlg, text="", font=f, fg="#b00000", wraplength=540, justify="left")
     tip.pack(anchor="w", padx=14)
+
+    tk.Label(dlg, text="作者 %s　·　%s" % (AUTHOR, NOTICE),
+             font=("Microsoft YaHei UI", 9), fg="#9a5050",
+             wraplength=540, justify="left").pack(anchor="w", padx=14, pady=(6, 0))
 
     def _finish(text: str, msg: str) -> None:
         try:

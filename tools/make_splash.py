@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "assets" / "splash.png"
 
 sys.path.insert(0, str(ROOT))
-from mjd.version import VERSION  # noqa: E402
+from mjd.version import AUTHOR, VERSION  # noqa: E402
 
 W, H = 460, 240
 BG = (16, 19, 24)
@@ -49,6 +49,7 @@ def main() -> int:
     d.text((W - 34 - vw, 34), ver, font=font(13), fill=MUTED + (255,))
     d.text((34, 60), "墨迹大侠 · 自动钓鱼", font=font(30, bold=True), fill=TEXT + (255,))
     d.text((34, 108), "正在启动，请稍候…", font=font(15), fill=MUTED + (255,))
+    d.text((34, 148), "by " + AUTHOR, font=font(12), fill=(110, 118, 138, 255))
 
     # 底部进度条（静态装饰，表示"在动"）
     d.rounded_rectangle([34, H - 44, W - 34, H - 38], radius=3, fill=BG + (255,))

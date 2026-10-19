@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from mjd.version import APP_NAME, VERSION  # noqa: E402
+from mjd.version import APP_NAME, AUTHOR, NOTICE, VERSION  # noqa: E402
 
 NAME = "墨迹大侠自动钓鱼"
 
@@ -36,10 +36,12 @@ VSVersionInfo(
   kids=[
     StringFileInfo([
       StringTable('080404b0', [
-        StringStruct('CompanyName', 'inkangler'),
+        StringStruct('CompanyName', %r),
         StringStruct('FileDescription', %r),
         StringStruct('FileVersion', %r),
         StringStruct('InternalName', 'inkangler'),
+        StringStruct('LegalCopyright', %r),
+        StringStruct('Comments', %r),
         StringStruct('OriginalFilename', %r),
         StringStruct('ProductName', 'inkangler'),
         StringStruct('ProductVersion', %r)
@@ -48,7 +50,8 @@ VSVersionInfo(
     VarFileInfo([VarStruct('Translation', [2052, 1200])])
   ]
 )
-""" % (nums, nums, APP_NAME, VERSION, name + ".exe", VERSION)
+""" % (nums, nums, AUTHOR, APP_NAME, VERSION, "© " + AUTHOR, NOTICE,
+       name + ".exe", VERSION)
     p = ROOT / "build" / "version_info.txt"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text, encoding="utf-8")
