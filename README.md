@@ -106,6 +106,26 @@ curl https://blog.dabolang.dpdns.org/api/health          # {"ok":true,"kv":true,
 > 注意：服务器在 Cloudflare 后面，客户端请求必须带 `User-Agent`，
 > 用默认的 `Python-urllib/x.y` 会被挡成 `403 error code: 1010`。
 
+### 开发 / 提交
+
+本机直连 GitHub 会在拉取数据时被重置，走 v2rayN 的 SOCKS5 代理才稳定；另外 Windows 自带的
+schannel 会卡在证书吊销检查（`CRYPT_E_REVOCATION_OFFLINE`），换 OpenSSL 后端即可：
+
+```bash
+git config --global http.sslBackend openssl
+git config --global http.https://github.com/.proxy socks5h://127.0.0.1:10808
+```
+
+日常：
+
+```bash
+git add -A
+git commit -m "改了什么"
+git push
+```
+
+> 代理端口以 v2rayN 当前设置为准（默认 10808）。仓库：`bigBoLang/moji-daxia-auto-fish`（私有）。
+
 ### 两种模式
 
 | 模式 | 结算窗里怎么做 | 默认抛竿 | 鱼箱 |
