@@ -211,7 +211,9 @@ def activate_online(machine: str, code: str, server: str | None = None,
             say("  成功：%s" % base)
             return True, msg, text
 
-    return False, "连不上激活服务器（已试 %d 次，最后一次：%s）" % (len(bases) * 2, last), ""
+    return False, ("连不上激活服务器（已试 %d 次，最后一次：%s）\n"
+                   "如果开着代理/VPN（v2rayN 的 TUN 模式也算），先关掉代理再点一次。"
+                   % (len(bases) * 2, last)), ""
 
 
 def save(base: Path, text: str) -> Path:

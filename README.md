@@ -1,6 +1,6 @@
-# inkangler · 墨迹大侠自动钓鱼
+﻿# inkangler · 墨迹大侠自动钓鱼
 
-> 当前版本 **v1.0.1** —— 版本号只在 `mjd/version.py` 里改一处，标题栏、闪屏、exe 文件属性会跟着变。
+> 当前版本 **v1.0.2** —— 版本号只在 `mjd/version.py` 里改一处，标题栏、闪屏、exe 文件属性会跟着变。
 
 > **作者：大波浪**　·　仅供个人自用，**禁止传播、转售或用于任何违法用途**。
 > 本程序只做图像识别 + 模拟点击，不修改游戏文件、不注入进程、不上传游戏数据。
@@ -92,6 +92,11 @@ python tools/lickey.py verify 别人的license.key     # 校验一份授权
 | 存储 | Cloudflare KV 命名空间 `moji-license`（绑定名 `LIC`） |
 | 密钥 | `LICENSE_KEY`（Ed25519 私钥，PKCS#8 base64）、`ADMIN_KEY`（管理口令），都是 Pages 环境变量 |
 | 规则 | **一码一机**：第一次激活就绑死机器码；同机重复激活允许（重装不折腾）；换机器 → 拒绝；有码可吊销 |
+
+> ⚠️ **激活时先关代理**：开着 v2rayN 这类代理（特别是 TUN 模式）时，激活请求会走代理线路，
+> 常见现象是卡十几秒后报 `The handshake operation timed out`。关掉代理直连再点一次就好。
+> 程序本身会依次尝试「主域名 → 备用域名 `myblog.dabolang.dpdns.org` → 强制 TLS 1.2」共 4 次，
+> 关掉代理后通常一次就过。
 
 日常用法：
 
@@ -454,3 +459,4 @@ tools/
   其它       早期探索/标定脚本
 shots/       调试截图、录到的结算弹窗（shots/dialogs/，新的存 live/ 子目录）、运行日志
 ```
+
