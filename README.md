@@ -136,7 +136,7 @@ git commit -m "改了什么"
 git push
 ```
 
-> 代理端口以 v2rayN 当前设置为准（默认 10808）。仓库：`bigBoLang/moji-daxia-auto-fish`（私有）。
+> 代理端口以 v2rayN 当前设置为准（默认 10808）。仓库：`bigBoLang/inkangler`（私有）。
 
 ### 两种模式
 
