@@ -11,13 +11,48 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from mjd.version import APP_NAME, VERSION  # noqa: E402
+
 NAME = "墨迹大侠自动钓鱼"
+
+
+def write_version_file(name: str) -> Path:
+    """生成 Windows 版本资源，右键 → 属性 → 详细信息 里就能看到版本号。"""
+    nums = tuple(([int(x) for x in re.findall(r"\d+", VERSION)] + [0, 0, 0, 0])[:4])
+    text = """# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=%s, prodvers=%s,
+    mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable('080404b0', [
+        StringStruct('CompanyName', 'inkangler'),
+        StringStruct('FileDescription', %r),
+        StringStruct('FileVersion', %r),
+        StringStruct('InternalName', 'inkangler'),
+        StringStruct('OriginalFilename', %r),
+        StringStruct('ProductName', 'inkangler'),
+        StringStruct('ProductVersion', %r)
+      ])
+    ]),
+    VarFileInfo([VarStruct('Translation', [2052, 1200])])
+  ]
+)
+""" % (nums, nums, APP_NAME, VERSION, name + ".exe", VERSION)
+    p = ROOT / "build" / "version_info.txt"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+    return p
 
 
 def desktop() -> Path:
@@ -38,6 +73,7 @@ def main() -> int:
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile", "--windowed",
         "--splash", str(ROOT / "assets" / "splash.png"),
+        "--version-file", str(write_version_file(a.name)),
         "--name", a.name,
         "--paths", str(ROOT),
         "--add-data", "%s;mjd" % (ROOT / "mjd" / "digit_bank.npz"),

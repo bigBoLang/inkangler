@@ -7,12 +7,16 @@
 """
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "assets" / "splash.png"
+
+sys.path.insert(0, str(ROOT))
+from mjd.version import VERSION  # noqa: E402
 
 W, H = 460, 240
 BG = (16, 19, 24)
@@ -40,6 +44,9 @@ def main() -> int:
     d.rounded_rectangle([0, 0, 7, H - 1], radius=4, fill=ACCENT + (255,))
 
     d.text((34, 32), "inkangler", font=font(15), fill=ACCENT + (255,))
+    ver = "v" + VERSION
+    vw = d.textlength(ver, font=font(13))
+    d.text((W - 34 - vw, 34), ver, font=font(13), fill=MUTED + (255,))
     d.text((34, 60), "墨迹大侠 · 自动钓鱼", font=font(30, bold=True), fill=TEXT + (255,))
     d.text((34, 108), "正在启动，请稍候…", font=font(15), fill=MUTED + (255,))
 

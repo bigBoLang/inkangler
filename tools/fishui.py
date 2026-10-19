@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from mjd import hook, sell, win  # noqa: E402
 from mjd import license as lic  # noqa: E402
+from mjd.version import APP_NAME, VERSION  # noqa: E402
 
 def _app_dir() -> Path:
     """配置文件/日志/截图放哪儿。
@@ -114,10 +115,11 @@ class App:
     # ---------------------------------------------------------------- 界面
     def _build(self) -> None:
         r = self.root
-        r.title("墨迹大侠 · 自动钓鱼"
-                + ("  [管理员]" if ctypes.windll.shell32.IsUserAnAdmin() else "  [普通权限]"))
-        r.geometry("560x660")
-        r.minsize(520, 600)
+        r.title("%s  v%s%s" % (
+            APP_NAME, VERSION,
+            "  [管理员]" if ctypes.windll.shell32.IsUserAnAdmin() else "  [普通权限]"))
+        r.geometry("560x700")
+        r.minsize(520, 640)
         f = ("Microsoft YaHei UI", 10)
         style = ttk.Style()
         try:
@@ -205,6 +207,7 @@ class App:
         self.btn_sell.pack(side="left")
         self.btn_admin = ttk.Button(row, text="管理员重启", command=self._relaunch_admin)
         self.btn_admin.pack(side="right")
+        ttk.Button(row, text="关于", command=self._about).pack(side="right", padx=(0, 6))
 
         # 状态
         st = ttk.Frame(top)
@@ -214,8 +217,12 @@ class App:
         ttk.Label(st, textvariable=self.counters).pack(side="right")
 
         info = ttk.Frame(top)
-        info.pack(fill="x", pady=(2, 6))
+        info.pack(fill="x", pady=(2, 4))
         ttk.Label(info, textvariable=self.last, foreground="#555").pack(side="left")
+
+        ttk.Label(top, foreground="#7a8296", justify="left", wraplength=520,
+                  text="提示：先在游戏里停在钓鱼界面，再点「开始」；"
+                       "运行中不抢鼠标和焦点，可以照常用电脑。").pack(fill="x", pady=(0, 4))
 
         # 日志
         box4 = ttk.LabelFrame(r, text=" 日志 ")
@@ -229,6 +236,8 @@ class App:
         self.txt.configure(state="disabled")
         if self.auth:
             self._log(self.auth)
+        self._log("%s v%s · %s" % (APP_NAME, VERSION,
+                                   "已授权" if self.auth else "未授权"))
         self._log("准备就绪。先在游戏里停在钓鱼界面，再点「开始」。")
 
     # ---------------------------------------------------------------- 小工具
@@ -316,6 +325,52 @@ class App:
         if self.worker and self.worker.is_alive():
             self.stop_evt.set()
         self.root.after(500, self.root.destroy)
+
+    def _about(self) -> None:
+        """版本 / 授权 / 机器码 / 使用提示，出问题时方便截图或复制。"""
+        ok, msg, owner = lic.check(ROOT)
+        machine = lic.machine_code()
+        line = ("已授权：%s" % owner) if ok else ("未授权：%s" % msg)
+
+        win = tk.Toplevel(self.root)
+        win.title("关于 · " + APP_NAME)
+        win.geometry("540x430")
+        win.resizable(False, False)
+        win.transient(self.root)
+        f = ("Microsoft YaHei UI", 10)
+
+        tk.Label(win, text=APP_NAME,
+                 font=("Microsoft YaHei UI", 16, "bold")).pack(anchor="w", padx=16, pady=(16, 0))
+        tk.Label(win, text="v%s   ·   inkangler" % VERSION,
+                 foreground="#3d7bfd", font=f).pack(anchor="w", padx=16)
+        tk.Label(win, text=line, font=f, justify="left", wraplength=500).pack(
+            anchor="w", padx=16, pady=(10, 0))
+        tk.Label(win, text="机器码：%s" % machine,
+                 font=("Consolas", 10)).pack(anchor="w", padx=16, pady=(6, 0))
+        tk.Label(win, text="服务地址：%s" % lic.server_url(), foreground="#666",
+                 font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=16, pady=(2, 0))
+
+        tips = ("使用提示\n"
+                "1. 微信里打开游戏，停在钓鱼界面，再点「开始」。\n"
+                "2. 运行中不抢鼠标、不抢焦点，可以照常用电脑。\n"
+                "3. 点了没反应 / 截图全黑 → 用「管理员重启」。\n"
+                "4. 「喂鱼」只卖超过阈值的鱼，短的留进鱼箱。\n"
+                "5. 「鱼币」所有鱼都卖，抛竿默认满力。")
+        tk.Label(win, text=tips, font=f, justify="left", wraplength=500,
+                 foreground="#333").pack(anchor="w", padx=16, pady=(12, 0))
+
+        def copy_all() -> None:
+            win.clipboard_clear()
+            win.clipboard_append("\n".join([
+                "%s v%s" % (APP_NAME, VERSION), line,
+                "机器码：" + machine, "服务：" + lic.server_url()]))
+            copy_btn.configure(text="已复制")
+
+        btns = ttk.Frame(win)
+        btns.pack(side="bottom", fill="x", padx=16, pady=12)
+        copy_btn = ttk.Button(btns, text="复制版本信息", command=copy_all)
+        copy_btn.pack(side="left")
+        ttk.Button(btns, text="关闭", command=win.destroy).pack(side="right")
 
     def _sell_now(self) -> None:
         if self.worker and self.worker.is_alive():
@@ -596,7 +651,7 @@ def _license_gate(root: tk.Tk, reason: str) -> tuple[bool, str]:
 
 # ---------------------------------------------------------------- 单实例 / 闪屏
 _MUTEX: int | None = None
-TITLE_PREFIX = "墨迹大侠 · 自动钓鱼"
+TITLE_PREFIX = APP_NAME
 
 
 def _focus_existing() -> None:
