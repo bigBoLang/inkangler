@@ -97,6 +97,18 @@ python tools/lickey.py revoke 3LVH-Y4NM-SYI7-2J6S        # 吊销某台
 curl https://blog.dabolang.dpdns.org/api/health          # {"ok":true,"kv":true,...}
 ```
 
+### 网页后台（手机也能用）
+
+浏览器打开 **`https://blog.dabolang.dpdns.org/api/admin`**，输一次管理口令（`server/admin.key` 里那串）就能：
+
+- 生成激活码（使用人 / 数量 / 有效期，出码一键复制）
+- 查看已激活机器（机器码、使用人、激活时间、到期）
+- 吊销机器
+
+口令只存在当前标签页，关掉就没了；同一 IP 连续输错 10 次锁 10 分钟。
+不想开浏览器时，双击 `授权管理.bat` 走本地菜单，功能一样。
+
+
 客户端流程：激活窗里填机器码（自动带出）+ 激活码 → 点「在线激活」→ 服务器签发授权 →
 **本地再用内置公钥验签一遍**（不盲信服务器）→ 写入 exe 旁边的 `license.key`，之后离线可用。
 

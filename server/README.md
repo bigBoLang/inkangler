@@ -14,8 +14,7 @@
 
 ## 用法一：放进博客仓库（自动部署）
 
-1. 在仓库根目录建文件：`functions/api/[[path]].js`，内容 = `server/license-worker.js`
-   （工作区里已经准备好一份：`cfsite/functions/api/[[path]].js`，整块拖进 GitHub 网页即可）
+1. 在仓库根目录建文件：`functions/api/[[path]].js`，内容 = `server/license-worker.js`（一字不改，整份覆盖）
 2. Pages 会自动重新部署。部署完后访问
    `https://blog.dabolang.dpdns.org/api/health` 应返回 `{"ok":true,...}`
 3. 去 Cloudflare 面板 → **Workers & Pages → 你的 Pages 项目 → Settings → Functions**：
@@ -51,12 +50,24 @@ python tools/deploy_server.py --host auth.dabolang.dpdns.org --zone dabolang.dpd
 
 ```
 GET  /api/health                                健康检查
+GET  /api/admin                                 网页后台（浏览器打开，口令在页面里输）
 POST /api/activate      {"machine","code"}      用激活码换授权
 GET  /api/status?machine=XXXX-...               查激活状态/是否被吊销
 POST /api/admin/codes   {"count","days","owner"} 生成激活码（X-Admin-Key）
 GET  /api/admin/machines                        列出已激活机器（X-Admin-Key）
 POST /api/admin/revoke  {"machine"}             吊销（X-Admin-Key）
 ```
+
+## 网页后台
+
+浏览器直接打开 <https://blog.dabolang.dpdns.org/api/admin>，输一次 `ADMIN_KEY` 就能：
+
+- 生成激活码（填使用人 / 数量 / 有效期，出码可一键复制）
+- 查看已激活机器（机器码、使用人、激活时间、到期）
+- 吊销机器
+
+口令只存在当前标签页（`sessionStorage`），关掉页面就没了，不会写进代码或 cookie。
+页面本身公开可访问，但没有口令做不了任何事；同一 IP 连续输错 10 次会锁 10 分钟。
 
 日常操作直接用 `tools/lickey.py`：
 
