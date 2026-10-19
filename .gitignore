@@ -1,0 +1,20 @@
+# ---- 打包产物（能重新生成，别进仓库）----
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+*.pyo
+
+# ---- 调试截图 / 录屏（915 MB，全是标定过程）----
+shots/
+
+# ---- 绝对不能提交的东西 ----
+tools/_license/
+license.key
+server/admin.key
+server/kv.id
+
+# ---- 本地测试残留 ----
+_t/
+*.log
