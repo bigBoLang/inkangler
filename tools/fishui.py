@@ -528,6 +528,15 @@ def _license_gate(root: tk.Tk, reason: str) -> tuple[bool, str]:
             return
         _finish(text, msg)
 
+    def _log(line: str) -> None:
+        """激活过程记一行，出问题时不用猜（窗口版 exe 看不到 stderr）。"""
+        try:
+            DATA.mkdir(parents=True, exist_ok=True)
+            with open(DATA / "activation.log", "a", encoding="utf-8") as f:
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line + "\n")
+        except OSError:
+            pass
+
     def _online() -> None:
         c = ent_code.get().strip()
         if not c:
@@ -535,24 +544,37 @@ def _license_gate(root: tk.Tk, reason: str) -> tuple[bool, str]:
             ent_code.focus_set()
             return
         btn_online.configure(state="disabled")
-        tip.configure(text="正在连激活服务器…", fg="#555")
+        tip.configure(text="正在连激活服务器…（最多等 20 秒）", fg="#555")
+        _log("激活尝试：机器码 %s，码 %s" % (code, c))
+
+        # 工作线程只往队列里放结果，绝不碰 Tk 控件：
+        # 跨线程调 dlg.after() 在打包后的窗口版 exe 里可能被静默吞掉，
+        # 界面就会永远停在「正在连激活服务器…」。
+        q: queue.Queue = queue.Queue()
 
         def work() -> None:
-            ok, msg, text = lic.activate_online(code, c)
-
-            def done() -> None:
-                btn_online.configure(state="normal")
-                if not ok:
-                    tip.configure(text="✗ " + msg, fg="#b00000")
-                    return
-                _finish(text, msg)
-
             try:
-                dlg.after(0, done)
-            except RuntimeError:                    # 窗口已经关了
-                pass
+                ok, msg, text = lic.activate_online(code, c)
+            except Exception as e:                      # noqa: BLE001
+                _log("激活抛异常：" + traceback.format_exc())
+                ok, msg, text = False, "激活时出错：%s: %s" % (type(e).__name__, e), ""
+            _log("激活结果：ok=%s msg=%s" % (ok, msg))
+            q.put((ok, msg, text))
+
+        def poll() -> None:
+            try:
+                ok, msg, text = q.get_nowait()
+            except queue.Empty:
+                dlg.after(120, poll)
+                return
+            btn_online.configure(state="normal")
+            if not ok:
+                tip.configure(text="✗ " + msg, fg="#b00000")
+                return
+            _finish(text, msg)
 
         threading.Thread(target=work, daemon=True).start()
+        dlg.after(120, poll)
 
     btn_online.configure(command=_online)
 
