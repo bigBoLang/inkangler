@@ -19,6 +19,7 @@ import base64
 import hashlib
 import json
 import os
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -31,6 +32,8 @@ LICENSE_FILE = "license.key"
 # 在线激活服务器（Cloudflare Pages Functions，挂在博客域名下）。
 # 临时改地址：设环境变量 MOJI_ACTIVATE_URL
 DEFAULT_SERVER = "https://blog.dabolang.dpdns.org"
+# 同一个 Pages 项目的另一个域名：主域名 TLS 被干扰时换这个再来一次
+FALLBACK_HOSTS = ("https://myblog.dabolang.dpdns.org",)
 
 try:                                    # 由 tools/lickey.py init 生成
     from ._pubkey import PUBLIC_KEY     # type: ignore
@@ -142,38 +145,73 @@ def server_url() -> str:
     return (os.environ.get("MOJI_ACTIVATE_URL") or DEFAULT_SERVER).rstrip("/")
 
 
-def activate_online(machine: str, code: str, server: str | None = None,
-                    timeout: float = 20.0) -> tuple[bool, str, str]:
-    """拿激活码去服务器换授权。返回 (成功?, 说明, 授权文本)。
-
-    一码一机：这个码第一次激活时就和 machine 绑死，换台电脑再来就被拒绝。
-    同一个码在同一台机器上重复激活是允许的（重装、换硬盘时省事）。
-    """
-    url = (server or server_url()) + "/api/activate"
-    body = json.dumps({"machine": machine, "code": code}).encode("utf-8")
+def _post_json(url: str, body: bytes, timeout: float, context=None) -> dict:
     # 不带 UA 会被 Cloudflare 拦成 403（error code: 1010）
     req = urllib.request.Request(url, data=body, method="POST",
                                  headers={"Content-Type": "application/json",
                                           "User-Agent": "moji-license/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.loads(r.read().decode("utf-8", "replace"))
-    except urllib.error.HTTPError as e:
-        try:
-            data = json.loads(e.read().decode("utf-8", "replace"))
-            return False, str(data.get("error") or ("服务器返回 %s" % e.code)), ""
-        except Exception:                                  # noqa: BLE001
-            return False, "激活服务器返回 %s" % e.code, ""
-    except Exception as e:                                 # noqa: BLE001
-        return False, "连不上激活服务器（%s）" % e, ""
+    with urllib.request.urlopen(req, timeout=timeout, context=context) as r:
+        return json.loads(r.read().decode("utf-8", "replace"))
 
-    if not data.get("ok"):
-        return False, str(data.get("error") or "激活失败"), ""
-    text = str(data.get("license") or "")
-    ok, msg, _ = verify_text(text)
-    if not ok:                       # 服务器给的也照样验签，不盲信
-        return False, "服务器给的授权校验不过：%s" % msg, ""
-    return True, msg, text
+
+def activate_online(machine: str, code: str, server: str | None = None,
+                    timeout: float = 8.0, log=None) -> tuple[bool, str, str]:
+    """拿激活码去服务器换授权。返回 (成功?, 说明, 授权文本)。
+
+    一码一机：这个码第一次激活时就和 machine 绑死，换台电脑再来就被拒绝。
+    同一个码在同一台机器上重复激活是允许的（重装、换硬盘时省事）。
+
+    线路不好时会自动重试：先主域名，再备用域名（同一个 Pages 项目），
+    然后换一份「只允许 TLS 1.2」的连接再各试一次——有些线路对 TLS 1.3
+    的 ClientHello 直接不回包，表现就是 handshake timed out。
+    """
+    def say(msg: str) -> None:
+        if log:
+            try:
+                log(msg)
+            except Exception:                      # noqa: BLE001
+                pass
+
+    body = json.dumps({"machine": machine, "code": code}).encode("utf-8")
+
+    bases: list[str] = []
+    for b in [(server or server_url())] + list(FALLBACK_HOSTS):
+        b = b.rstrip("/")
+        if b not in bases:
+            bases.append(b)
+
+    ctx12 = ssl.create_default_context()
+    ctx12.maximum_version = ssl.TLSVersion.TLSv1_2
+
+    last: object = "未知错误"
+    for context in (None, ctx12):
+        for base in bases:
+            url = base + "/api/activate"
+            say("尝试 %s（%s）" % (url, "TLS1.2" if context else "默认"))
+            try:
+                data = _post_json(url, body, timeout, context)
+            except urllib.error.HTTPError as e:
+                # 服务器明确回了错误（码不对 / 已被绑定），换线路也没用
+                try:
+                    data = json.loads(e.read().decode("utf-8", "replace"))
+                    return False, str(data.get("error") or ("服务器返回 %s" % e.code)), ""
+                except Exception:                              # noqa: BLE001
+                    return False, "激活服务器返回 %s" % e.code, ""
+            except Exception as e:                             # noqa: BLE001
+                last = e
+                say("  失败：%s" % e)
+                continue
+
+            if not data.get("ok"):
+                return False, str(data.get("error") or "激活失败"), ""
+            text = str(data.get("license") or "")
+            ok, msg, _ = verify_text(text)
+            if not ok:                     # 服务器给的也照样验签，不盲信
+                return False, "服务器给的授权校验不过：%s" % msg, ""
+            say("  成功：%s" % base)
+            return True, msg, text
+
+    return False, "连不上激活服务器（已试 %d 次，最后一次：%s）" % (len(bases) * 2, last), ""
 
 
 def save(base: Path, text: str) -> Path:

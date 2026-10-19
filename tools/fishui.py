@@ -601,7 +601,7 @@ def _license_gate(root: tk.Tk, reason: str) -> tuple[bool, str]:
             ent_code.focus_set()
             return
         btn_online.configure(state="disabled")
-        tip.configure(text="正在连激活服务器…（最多等 20 秒）", fg="#555")
+        tip.configure(text="正在连激活服务器…（失败会自动换线路重试，最多约 30 秒）", fg="#555")
         _log("激活尝试：机器码 %s，码 %s" % (code, c))
 
         # 工作线程只往队列里放结果，绝不碰 Tk 控件：
@@ -611,7 +611,7 @@ def _license_gate(root: tk.Tk, reason: str) -> tuple[bool, str]:
 
         def work() -> None:
             try:
-                ok, msg, text = lic.activate_online(code, c)
+                ok, msg, text = lic.activate_online(code, c, log=_log)
             except Exception as e:                      # noqa: BLE001
                 _log("激活抛异常：" + traceback.format_exc())
                 ok, msg, text = False, "激活时出错：%s: %s" % (type(e).__name__, e), ""
