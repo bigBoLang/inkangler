@@ -32,7 +32,7 @@ from typing import Callable
 
 import numpy as np
 
-from . import arc, fish, length, ui, win
+from . import arc, color, fish, length, ui, win
 
 DIAL = (int(ui.ELEMENTS["bait_count"].x), int(ui.ELEMENTS["bait_count"].y) + 10)
 DIM = 128.0          # 亮度低于此值说明有弹窗
@@ -78,6 +78,24 @@ SELL_WAIT_MAX = 12.0  # 结算窗里最多花多久去点「原价出售」
 # 公告横幅偶尔会整条盖住「原价出售」。这时按已知坐标盲点一次（单按钮在正中，
 # 新纪录双按钮时在左半边），点完再确认画面确实回到钓鱼主界面。
 BLIND_BTN = ((280, 591), (189, 591))
+
+
+def decide(mode: str, val: float | None, tier: str | None,
+           sell_colors: set[str], min_len: float) -> tuple[bool, str]:
+    """结算时「卖」还是「留」。纯函数，方便单独测。
+
+    优先级：鱼币模式（全卖） > 勾选的颜色（直接卖） > 长度阈值。
+    颜色没读出来（tier=None）就退回长度规则，不会因为认不出颜色就乱卖。
+    """
+    if mode == MODE_COINS:
+        return True, "鱼币模式：全卖"
+    if tier and tier in sell_colors:
+        return True, "颜色 %s（勾了「直接卖」）" % color.NAME.get(tier, tier)
+    if val is None:
+        return False, "长度没认出来，先留进鱼箱"
+    if val > min_len:
+        return True, "> %.0f" % min_len
+    return False, "≤ %.0f" % min_len
 
 # ---- 前馈（把鱼的「规律」用起来）
 # 实测：鱼的角速度基本恒定（右 ~+25°/s、左 ~-35°/s，快的到 ±47），到轨道两端才折返。
@@ -242,6 +260,7 @@ class HookBot:
                  feedforward: bool = True, jump_guard: bool = JUMP_GUARD,
                  cast_level: int = CAST_LEVEL, cast_max: float = CAST_MAX,
                  mode: str = MODE_COINS, min_len: float = MIN_LEN,
+                 sell_colors: set[str] | None = None,
                  should_stop: Callable[[], bool] | None = None,
                  on_event: Callable[[dict], None] | None = None):
         self.w = win.find_window("墨迹大侠")
@@ -261,6 +280,9 @@ class HookBot:
                           else max(CAST_MIN, self.cast_max * self.cast_level / 10.0))
         self.mode = mode
         self.min_len = float(min_len)
+        # 勾选的颜色：钓上来直接卖，不看长度；没勾的仍按长度判断。
+        # 只在喂鱼模式生效，鱼币模式本来就全卖。
+        self.sell_colors = set(sell_colors or ())
         self.should_stop = should_stop
         self.on_event = on_event
         self.max_secs = max_secs
@@ -548,7 +570,7 @@ class HookBot:
 
     # ---------------------------------------------------------------- 结算窗
     def handle_catch(self, verbose: bool = True) -> tuple[float | None, str]:
-        """结算窗还开着：读长度，按模式决定「直接卖掉」还是「留进鱼箱」。
+        """结算窗还开着：读长度和颜色，决定「直接卖掉」还是「留进鱼箱」。
 
         返回 (长度, 动作)，动作 = 'sold' / 'kept' / 'unknown'。
         卖：点青绿色的「原价出售」（新纪录时它左边那个，右边橙色的「前往鱼塘」别碰）。
@@ -556,28 +578,27 @@ class HookBot:
         """
         val = None
         text = ""
-        # 弹窗是淡入的，第一帧可能还没把字画全，给它 1.5s 重读几次
+        tier = None
+        cinfo: dict = {}
+        # 弹窗是淡入的，第一帧可能还没把字/颜色画全，给它 1.5s 重读几次
         for _ in range(4):
             img = self.grab()
             if brightness(img) >= DIM:
                 break
-            val, text, _ = length.read_length_detail(img)
-            if val is not None:
+            if val is None:
+                val, text, _ = length.read_length_detail(img)
+            if tier is None:
+                tier, cinfo = color.read_color(img)
+            if val is not None and tier is not None:
                 break
             time.sleep(0.4)
 
-        if self.mode == MODE_COINS:
-            want_sell, why = True, "鱼币模式：全卖"
-        elif val is None:
-            want_sell, why = False, "长度没认出来，先留进鱼箱"
-        elif val > self.min_len:
-            want_sell, why = True, "> %.0f" % self.min_len
-        else:
-            want_sell, why = False, "≤ %.0f" % self.min_len
+        want_sell, why = decide(self.mode, val, tier, self.sell_colors, self.min_len)
 
         if verbose:
-            self.log("  结算: 长度 %s  %s → %s" % (
+            self.log("  结算: 长度 %s · 颜色 %s  %s → %s" % (
                 ("%.1fcm" % val) if val is not None else "?(%s)" % (text or "读不到"),
+                color.describe(tier, cinfo) if tier else "?",
                 why, "直接卖掉" if want_sell else "留进鱼箱"))
 
         if not want_sell:

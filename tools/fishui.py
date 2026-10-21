@@ -29,7 +29,7 @@ from tkinter import messagebox, ttk
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from mjd import hook, sell, win  # noqa: E402
+from mjd import color, hook, sell, win  # noqa: E402
 from mjd import license as lic  # noqa: E402
 from mjd.version import APP_NAME, AUTHOR, NOTICE, VERSION  # noqa: E402
 
@@ -51,6 +51,9 @@ SETTINGS = DATA / "ui_settings.json"
 
 MODE_TEXT = {hook.MODE_FEED: "喂鱼", hook.MODE_COINS: "鱼币"}
 MODE_DEFAULT_LEVEL = {hook.MODE_FEED: 3, hook.MODE_COINS: 10}
+# 颜色复选框的文字颜色（深一点，浅色背景上也看得清）
+TIER_FG = {"red": "#c0392b", "yellow": "#a87900", "green": "#1e8e3e",
+           "blue": "#1a6fd4", "purple": "#7d3cc0", "gray": "#6b7280"}
 DEFAULT = {
     "mode": hook.MODE_FEED,
     "min_len": 65.0,
@@ -59,6 +62,7 @@ DEFAULT = {
     "auto_sell": False,
     "sell_every": 12,
     "cast_max": hook.CAST_MAX,
+    "sell_colors": [],
 }
 
 
@@ -101,6 +105,8 @@ class App:
         self.auto_sell = tk.BooleanVar(value=bool(cfg["auto_sell"]))
         self.sell_every = tk.IntVar(value=int(cfg["sell_every"]))
         self.cast_max = tk.DoubleVar(value=float(cfg["cast_max"]))
+        picked = set(cfg.get("sell_colors") or ())
+        self.sell_colors = {t: tk.BooleanVar(value=t in picked) for t in color.TIERS}
         self.status = tk.StringVar(value="待机")
         self.counters = tk.StringVar(value="钓上 0 · 卖出 0 · 留箱 0")
         self.last = tk.StringVar(value="最近：—")
@@ -118,8 +124,8 @@ class App:
         r.title("%s  v%s%s" % (
             APP_NAME, VERSION,
             "  [管理员]" if ctypes.windll.shell32.IsUserAnAdmin() else "  [普通权限]"))
-        r.geometry("560x700")
-        r.minsize(520, 640)
+        r.geometry("620x820")
+        r.minsize(580, 700)
         f = ("Microsoft YaHei UI", 10)
         style = ttk.Style()
         try:
@@ -171,6 +177,30 @@ class App:
         self.sp_max.pack(side="left", padx=(8, 4))
         ttk.Label(row, text="秒（蓄力条涨满的时间，默认 1.7）").pack(side="left")
 
+        # 颜色（可多选）
+        bg = style.lookup("TFrame", "background") or "#f0f0f0"
+        box_c = ttk.LabelFrame(top, text=" 颜色（勾了就直接卖，可多选） ")
+        box_c.pack(fill="x", pady=(0, 6))
+        row = ttk.Frame(box_c)
+        row.pack(fill="x", padx=10, pady=(8, 0))
+        self.cb_colors: dict[str, tk.Checkbutton] = {}
+        for t in color.TIERS:
+            cb = tk.Checkbutton(row, text=color.NAME[t], variable=self.sell_colors[t],
+                                command=self._save_later,
+                                font=("Microsoft YaHei UI", 10, "bold"),
+                                fg=TIER_FG[t], activeforeground=TIER_FG[t],
+                                bg=bg, activebackground=bg, selectcolor="white",
+                                disabledforeground="#aaa", bd=0, highlightthickness=0)
+            cb.pack(side="left", padx=(0, 10))
+            self.cb_colors[t] = cb
+        ttk.Button(row, text="清空", width=5,
+                   command=lambda: self._set_colors(())).pack(side="right")
+        ttk.Button(row, text="全选", width=5,
+                   command=lambda: self._set_colors(color.TIERS)).pack(side="right", padx=(0, 4))
+        ttk.Label(box_c, foreground="#7a8296", justify="left", wraplength=520,
+                  text="勾选的颜色不看长度、钓上来直接卖；没勾的仍按长度判断。"
+                       "鱼币模式本来就全卖，颜色不影响。").pack(fill="x", padx=10, pady=(2, 8))
+
         # 竿数 / 鱼箱
         box3 = ttk.LabelFrame(top, text=" 数量 ")
         box3.pack(fill="x", pady=(0, 6))
@@ -199,15 +229,19 @@ class App:
         # 按钮
         row = ttk.Frame(top)
         row.pack(fill="x", pady=(2, 8))
-        self.btn_start = ttk.Button(row, text="▶  开始", command=self._start)
+        right = ttk.Frame(row)
+        right.pack(side="right")
+        left = ttk.Frame(row)
+        left.pack(side="left")
+        self.btn_start = ttk.Button(left, text="▶  开始", width=7, command=self._start)
         self.btn_start.pack(side="left", padx=(0, 8))
-        self.btn_stop = ttk.Button(row, text="■  停止", command=self._stop, state="disabled")
+        self.btn_stop = ttk.Button(left, text="■  停止", width=7, command=self._stop, state="disabled")
         self.btn_stop.pack(side="left", padx=(0, 8))
-        self.btn_sell = ttk.Button(row, text="卖掉鱼箱里的鱼", command=self._sell_now)
+        self.btn_sell = ttk.Button(left, text="卖空鱼箱", width=8, command=self._sell_now)
         self.btn_sell.pack(side="left")
-        self.btn_admin = ttk.Button(row, text="管理员重启", command=self._relaunch_admin)
+        self.btn_admin = ttk.Button(right, text="管理员重启", width=10, command=self._relaunch_admin)
         self.btn_admin.pack(side="right")
-        ttk.Button(row, text="关于", command=self._about).pack(side="right", padx=(0, 6))
+        ttk.Button(right, text="关于", width=5, command=self._about).pack(side="right", padx=(0, 6))
 
         # 状态
         st = ttk.Frame(top)
@@ -253,12 +287,21 @@ class App:
     def _sync_mode(self, auto: bool = True) -> None:
         feed = self.mode.get() == hook.MODE_FEED
         self.sp_len.configure(state="normal" if feed else "disabled")
+        for cb in self.cb_colors.values():
+            cb.configure(state="normal" if feed else "disabled")
         if auto:
             # 切换模式时把「默认值」带出来，之后用户还能自己拖
             self.level.set(MODE_DEFAULT_LEVEL[self.mode.get()])
             self.auto_sell.set(not feed)
             self._update_cast_hint()
             self._save_later()
+
+    def _set_colors(self, tiers) -> None:
+        """「全选 / 清空」用。"""
+        want = set(tiers)
+        for t, v in self.sell_colors.items():
+            v.set(t in want)
+        self._save_later()
 
     def _log(self, msg: str) -> None:
         self.q.put(("log", msg))
@@ -277,6 +320,7 @@ class App:
                 "auto_sell": bool(self.auto_sell.get()),
                 "sell_every": _num(self.sp_every, DEFAULT["sell_every"], int),
                 "cast_max": _num(self.sp_max, hook.CAST_MAX, float),
+                "sell_colors": [t for t, v in self.sell_colors.items() if v.get()],
             }, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             pass
@@ -412,6 +456,7 @@ class App:
             total = _num(self.sp_rounds, 0, int)
             bot = hook.HookBot(
                 act=True, mode=mode, min_len=min_len,
+                sell_colors={t for t, v in self.sell_colors.items() if v.get()},
                 cast_level=int(self.level.get()), cast_max=cast_max,
                 log=self._log, should_stop=self.stop_evt.is_set,
                 on_event=lambda d: self.q.put(("event", d)),
