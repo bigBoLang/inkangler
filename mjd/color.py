@@ -6,7 +6,7 @@
 也是同一个色系——两者就是这条鱼的「颜色/品质色」。实测 36 张历史弹窗
 （`shots/dialogs/`）只有 6 类：
 
-    红   黄(金)   绿   蓝   紫   灰(白)
+    红   黄(金)   紫   蓝   绿   灰(白)
 
 光晕是渐变的、还会被鱼身挡住，读数不稳；鱼名是平涂的点阵字，取它的
 填充色最稳。所以这里只认名字那一行：
@@ -34,8 +34,8 @@ import numpy as np
 # 鱼名那一行（归一化到 552x991 的截图坐标）
 NAME_BAND = (268, 300, 210, 345)
 
-# 内部代号 -> 界面上的中文
-TIERS = ("red", "yellow", "green", "blue", "purple", "gray")
+# 内部代号 -> 界面上的中文（按界面顺序：红、黄、紫、蓝、绿、灰）
+TIERS = ("red", "yellow", "purple", "blue", "green", "gray")
 NAME = {"red": "红", "yellow": "黄", "green": "绿",
         "blue": "蓝", "purple": "紫", "gray": "灰"}
 ORDER = {t: i for i, t in enumerate(TIERS)}

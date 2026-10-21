@@ -148,34 +148,55 @@ class App:
                         value=hook.MODE_COINS, variable=self.mode,
                         command=self._sync_mode).pack(anchor="w", padx=10, pady=(0, 8))
 
-        # 阈值 + 力度
-        box2 = ttk.LabelFrame(top, text=" 规则 ")
+        # 钓鱼设置（阈值 / 力度 / 竿数 / 自动卖箱）—— 用 grid 对齐，标签一列、控件一列
+        box2 = ttk.LabelFrame(top, text=" 钓鱼设置 ")
         box2.pack(fill="x", pady=(0, 6))
-        row = ttk.Frame(box2)
-        row.pack(fill="x", padx=10, pady=(8, 2))
-        ttk.Label(row, text="长度阈值").pack(side="left")
-        self.sp_len = ttk.Spinbox(row, from_=1, to=200, increment=1, width=6,
-                                  textvariable=self.min_len, command=self._save_later)
-        self.sp_len.pack(side="left", padx=(8, 4))
-        self.lb_len = ttk.Label(row, text="cm　（喂鱼模式：超过它就卖）")
-        self.lb_len.pack(side="left")
+        g = ttk.Frame(box2)
+        g.pack(fill="x", padx=10, pady=(8, 8))
+        g.columnconfigure(2, weight=1)
+        LAB = {"padx": (0, 10), "sticky": "w", "pady": 3}
 
-        row = ttk.Frame(box2)
-        row.pack(fill="x", padx=10, pady=(4, 2))
-        ttk.Label(row, text="抛竿力度").pack(side="left")
-        self.sl = tk.Scale(row, from_=1, to=10, orient="horizontal", showvalue=False,
+        ttk.Label(g, text="长度阈值").grid(row=0, column=0, **LAB)
+        f = ttk.Frame(g)
+        f.grid(row=0, column=1, sticky="w", pady=3)
+        self.sp_len = ttk.Spinbox(f, from_=1, to=200, increment=1, width=6,
+                                  textvariable=self.min_len, command=self._save_later)
+        self.sp_len.pack(side="left")
+        ttk.Label(f, text="cm").pack(side="left", padx=(4, 0))
+        self.lb_len = ttk.Label(g, text="喂鱼模式：超过它就卖")
+        self.lb_len.grid(row=0, column=2, sticky="w", pady=3)
+
+        ttk.Label(g, text="抛竿力度").grid(row=1, column=0, **LAB)
+        self.sl = tk.Scale(g, from_=1, to=10, orient="horizontal", showvalue=False,
                            variable=self.level, length=210, sliderlength=22,
                            command=lambda *_: self._update_cast_hint())
-        self.sl.pack(side="left", padx=(8, 6))
-        ttk.Label(row, textvariable=self.cast_hint, width=26).pack(side="left")
+        self.sl.grid(row=1, column=1, sticky="w", pady=1)
+        ttk.Label(g, textvariable=self.cast_hint).grid(row=1, column=2, sticky="w", pady=3)
 
-        row = ttk.Frame(box2)
-        row.pack(fill="x", padx=10, pady=(2, 8))
-        ttk.Label(row, text="满力按住").pack(side="left")
-        self.sp_max = ttk.Spinbox(row, from_=1.0, to=4.0, increment=0.1, width=6,
+        ttk.Label(g, text="满力按住").grid(row=2, column=0, **LAB)
+        f = ttk.Frame(g)
+        f.grid(row=2, column=1, sticky="w", pady=3)
+        self.sp_max = ttk.Spinbox(f, from_=1.0, to=4.0, increment=0.1, width=6,
                                   textvariable=self.cast_max, command=self._update_cast_hint)
-        self.sp_max.pack(side="left", padx=(8, 4))
-        ttk.Label(row, text="秒（蓄力条涨满的时间，默认 1.7）").pack(side="left")
+        self.sp_max.pack(side="left")
+        ttk.Label(f, text="秒").pack(side="left", padx=(4, 0))
+        ttk.Label(g, text="蓄力条涨满的时间").grid(row=2, column=2, sticky="w", pady=3)
+
+        ttk.Label(g, text="钓多少竿").grid(row=3, column=0, **LAB)
+        self.sp_rounds = ttk.Spinbox(g, from_=0, to=9999, increment=1, width=7,
+                                     textvariable=self.rounds)
+        self.sp_rounds.grid(row=3, column=1, sticky="w", pady=3)
+        ttk.Label(g, text="0 = 一直钓").grid(row=3, column=2, sticky="w", pady=3)
+
+        ttk.Checkbutton(g, text="自动卖鱼箱", variable=self.auto_sell,
+                        command=self._save_later).grid(row=4, column=0, sticky="w", pady=(6, 0))
+        f = ttk.Frame(g)
+        f.grid(row=4, column=1, sticky="w", pady=(6, 0))
+        ttk.Label(f, text="每").pack(side="left")
+        self.sp_every = ttk.Spinbox(f, from_=1, to=50, increment=1, width=5,
+                                    textvariable=self.sell_every)
+        self.sp_every.pack(side="left", padx=(6, 6))
+        ttk.Label(f, text="条卖一次").pack(side="left")
 
         # 颜色（可多选）
         bg = style.lookup("TFrame", "background") or "#f0f0f0"
@@ -191,35 +212,14 @@ class App:
                                 fg=TIER_FG[t], activeforeground=TIER_FG[t],
                                 bg=bg, activebackground=bg, selectcolor="white",
                                 disabledforeground="#aaa", bd=0, highlightthickness=0)
-            cb.pack(side="left", padx=(0, 10))
+            cb.pack(side="left", padx=(0, 12))
             self.cb_colors[t] = cb
         ttk.Button(row, text="清空", width=5,
                    command=lambda: self._set_colors(())).pack(side="right")
         ttk.Button(row, text="全选", width=5,
                    command=lambda: self._set_colors(color.TIERS)).pack(side="right", padx=(0, 4))
-        ttk.Label(box_c, foreground="#7a8296", justify="left", wraplength=520,
-                  text="勾选的颜色不看长度、钓上来直接卖；没勾的仍按长度判断。"
-                       "鱼币模式本来就全卖，颜色不影响。").pack(fill="x", padx=10, pady=(2, 8))
-
-        # 竿数 / 鱼箱
-        box3 = ttk.LabelFrame(top, text=" 数量 ")
-        box3.pack(fill="x", pady=(0, 6))
-        row = ttk.Frame(box3)
-        row.pack(fill="x", padx=10, pady=(8, 4))
-        ttk.Label(row, text="钓多少竿").pack(side="left")
-        self.sp_rounds = ttk.Spinbox(row, from_=0, to=9999, increment=1, width=7,
-                                     textvariable=self.rounds)
-        self.sp_rounds.pack(side="left", padx=(8, 4))
-        ttk.Label(row, text="（0 = 一直钓，按「停止」收工）").pack(side="left")
-
-        row = ttk.Frame(box3)
-        row.pack(fill="x", padx=10, pady=(2, 8))
-        ttk.Checkbutton(row, text="自动卖鱼箱，每", variable=self.auto_sell,
-                        command=self._save_later).pack(side="left")
-        self.sp_every = ttk.Spinbox(row, from_=1, to=50, increment=1, width=5,
-                                    textvariable=self.sell_every)
-        self.sp_every.pack(side="left", padx=(4, 4))
-        ttk.Label(row, text="条卖一次").pack(side="left")
+        ttk.Label(box_c, foreground="#7a8296", justify="left", wraplength=560,
+                  text="勾选的颜色直接卖、不看长度；没勾的按长度判断。鱼币模式全卖。").pack(fill="x", padx=10, pady=(2, 8))
 
         # 点进输入框就全选，免得在原来的「0」后面接着打字变成 012 / 120
         for sb in (self.sp_len, self.sp_max, self.sp_rounds, self.sp_every):
@@ -378,6 +378,8 @@ class App:
         ok, msg, owner = lic.check(ROOT)
         machine = lic.machine_code()
         line = ("已授权：%s" % owner) if ok else ("未授权：%s" % msg)
+        if not ok and self.auth:      # 已经由启动流程判定过的授权，直接沿用
+            line = self.auth
 
         win = tk.Toplevel(self.root)
         win.title("关于 · " + APP_NAME)
@@ -402,7 +404,8 @@ class App:
                 "2. 运行中不抢鼠标、不抢焦点，可以照常用电脑。\n"
                 "3. 点了没反应 / 截图全黑 → 用「管理员重启」。\n"
                 "4. 「喂鱼」只卖超过阈值的鱼，短的留进鱼箱。\n"
-                "5. 「鱼币」所有鱼都卖，抛竿默认满力。")
+                "5. 「鱼币」所有鱼都卖，抛竿默认满力。\n"
+                "6. 勾选的颜色钓上来直接卖，不看长度。")
         tk.Label(win, text=tips, font=f, justify="left", wraplength=500,
                  foreground="#333").pack(anchor="w", padx=16, pady=(12, 0))
         tk.Label(win, text="作者 %s　·　%s" % (AUTHOR, NOTICE),
