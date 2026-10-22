@@ -4,7 +4,7 @@
 打包时 `tools/build_exe.py` 会读它生成 Windows 版本资源。
 """
 
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 APP_NAME = "墨迹大侠 · 自动钓鱼"
 AUTHOR = "大波浪"
 REPO = "https://github.com/bigBoLang/inkangler"

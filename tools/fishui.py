@@ -63,6 +63,7 @@ DEFAULT = {
     "sell_every": 12,
     "cast_max": hook.CAST_MAX,
     "sell_colors": [],
+    "stop_full": True,      # 喂鱼模式：连续两竿没反应就停（鱼箱满/没饵）
 }
 
 
@@ -107,6 +108,7 @@ class App:
         self.cast_max = tk.DoubleVar(value=float(cfg["cast_max"]))
         picked = set(cfg.get("sell_colors") or ())
         self.sell_colors = {t: tk.BooleanVar(value=t in picked) for t in color.TIERS}
+        self.stop_full = tk.BooleanVar(value=bool(cfg.get("stop_full", True)))
         self.status = tk.StringVar(value="待机")
         self.counters = tk.StringVar(value="钓上 0 · 卖出 0 · 留箱 0")
         self.last = tk.StringVar(value="最近：—")
@@ -197,6 +199,12 @@ class App:
                                     textvariable=self.sell_every)
         self.sp_every.pack(side="left", padx=(6, 6))
         ttk.Label(f, text="条卖一次").pack(side="left")
+
+        # 鱼箱满了自动停（喂鱼模式默认开启：连续两竿抛出去没反应就停）
+        self.stop_full = tk.BooleanVar(value=True)
+        self.cb_stop_full = ttk.Checkbutton(g, text="鱼箱满了自动停（连续两竿没反应）",
+                        variable=self.stop_full, command=self._save_later)
+        self.cb_stop_full.grid(row=5, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
         # 颜色（可多选）
         bg = style.lookup("TFrame", "background") or "#f0f0f0"
@@ -289,6 +297,7 @@ class App:
         self.sp_len.configure(state="normal" if feed else "disabled")
         for cb in self.cb_colors.values():
             cb.configure(state="normal" if feed else "disabled")
+        self.cb_stop_full.configure(state="normal" if feed else "disabled")
         if auto:
             # 切换模式时把「默认值」带出来，之后用户还能自己拖
             self.level.set(MODE_DEFAULT_LEVEL[self.mode.get()])
@@ -321,6 +330,7 @@ class App:
                 "sell_every": _num(self.sp_every, DEFAULT["sell_every"], int),
                 "cast_max": _num(self.sp_max, hook.CAST_MAX, float),
                 "sell_colors": [t for t, v in self.sell_colors.items() if v.get()],
+                "stop_full": bool(self.stop_full.get()),
             }, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             pass
@@ -457,6 +467,7 @@ class App:
             cast_max = _num(self.sp_max, hook.CAST_MAX, float)
             every = _num(self.sp_every, DEFAULT["sell_every"], int) if self.auto_sell.get() else 0
             total = _num(self.sp_rounds, 0, int)
+            stop_full = bool(self.stop_full.get())
             bot = hook.HookBot(
                 act=True, mode=mode, min_len=min_len,
                 sell_colors={t for t, v in self.sell_colors.items() if v.get()},
@@ -465,6 +476,7 @@ class App:
                 on_event=lambda d: self.q.put(("event", d)),
                 dialog_dir=DATA / "dialogs" / "live",
                 max_secs=90.0,
+                disable_auto=True,
             )
             self.bot = bot
             seller = sell.Seller(w, act=True, log=self._log)
@@ -472,8 +484,11 @@ class App:
                       % (MODE_TEXT[mode], min_len, bot.cast_level, bot.cast_secs,
                          ("每 %d 条自动卖" % every) if every else "不自动卖",
                          ("%d 竿" % total) if total else "一直钓"))
+            if stop_full and mode == hook.MODE_FEED:
+                self._log("喂鱼模式开启「鱼箱满了自动停」：连续两竿没反应即停")
             since = 0
             i = 0
+            no_minigame_streak = 0
             while not self.stop_evt.is_set():
                 i += 1
                 if total and i > total:
@@ -494,10 +509,19 @@ class App:
                     elif at.action == "kept":
                         self.n_kept += 1
                     since += 1
+                    no_minigame_streak = 0
                 if at.result == "stuck":
                     self._log("现在不在钓鱼界面（可能点到别的页面了），已停下，请看一眼游戏")
                     self.q.put(("status", "停了：不在钓鱼界面"))
                     break
+                if at.result == "no-minigame":
+                    no_minigame_streak += 1
+                    if stop_full and mode == hook.MODE_FEED and no_minigame_streak >= 2:
+                        self._log("连续 %d 竿抛出去没反应，鱼箱可能满了（或没饵了），自动停止" % no_minigame_streak)
+                        self.q.put(("status", "鱼箱满了，已停止"))
+                        break
+                else:
+                    no_minigame_streak = 0
                 self.q.put(("counters", None))
                 if every and since >= every and not self.stop_evt.is_set():
                     self.q.put(("status", "卖鱼箱…"))

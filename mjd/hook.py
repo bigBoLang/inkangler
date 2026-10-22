@@ -262,7 +262,8 @@ class HookBot:
                  mode: str = MODE_COINS, min_len: float = MIN_LEN,
                  sell_colors: set[str] | None = None,
                  should_stop: Callable[[], bool] | None = None,
-                 on_event: Callable[[dict], None] | None = None):
+                 on_event: Callable[[dict], None] | None = None,
+                 disable_auto: bool = True):
         self.w = win.find_window("墨迹大侠")
         self.pi = win.PostInput(self.w)
         self.act = act
@@ -293,6 +294,8 @@ class HookBot:
                     if p.stem[1:].isdigit()]
             self.dialog_n = (max(nums) + 1) if nums else 0
         self.log = log
+        if disable_auto and act:
+            self._disable_auto_fishing()
         self.keep_frames = keep_frames
         self.down = False
         self.acc = 0.0
@@ -313,6 +316,38 @@ class HookBot:
         self.t_find: list[float] = []
         self.t_gap: list[float] = []
         self.t_last = 0.0
+
+    def _disable_auto_fishing(self) -> None:
+        """确保游戏内置「自动钓鱼」开关是关闭的。
+        开启时会和手动 PostMessage 点击冲突，导致抛竿后完全没反应。
+        自动按钮位置 (63, 728)：橙色=开，灰色=关。
+        注意：该按钮可能不响应 PostMessage，需用户手动关闭。
+        """
+        if not self.act:
+            return
+        try:
+            img = self.grab()
+            import numpy as np
+            a = np.asarray(img)
+            patch = a[720:740, 45:70]
+            r, g = patch[..., 0].mean(), patch[..., 1].mean()
+            if r > 120 and r - g > 10:
+                self.log("  ⚠ 检测到「自动钓鱼」开启（橙色），尝试关闭…")
+                self.pi.click(63, 728)
+                time.sleep(0.8)
+                img2 = self.grab()
+                a2 = np.asarray(img2)
+                patch2 = a2[720:740, 45:70]
+                r2, g2 = patch2[..., 0].mean(), patch2[..., 1].mean()
+                if r2 - g2 <= 10 or r2 <= 120:
+                    self.log("  ✅ 自动钓鱼已关闭")
+                else:
+                    self.log("  ❌ PostMessage 无法关闭该按钮（游戏限制）")
+                    self.log("  🔴 ⚠ 必须手动点一下游戏里的「自动」齿轮图标关掉它，否则抛竿完全没反应！")
+            else:
+                self.log("  ✅ 自动钓鱼已是关闭状态")
+        except Exception as e:
+            self.log(f"  检查自动钓鱼出错：{e}")
 
     # ---------------------------------------------------------------- 基础
     def grab(self):

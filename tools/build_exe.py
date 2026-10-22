@@ -22,9 +22,10 @@ sys.path.insert(0, str(ROOT))
 from mjd.version import APP_NAME, AUTHOR, NOTICE, VERSION  # noqa: E402
 
 NAME = "墨迹大侠自动钓鱼"
+PANEL_NAME = "墨迹大侠功能面板"
 
 
-def write_version_file(name: str) -> Path:
+def write_version_file(name: str, desc: str = APP_NAME) -> Path:
     """生成 Windows 版本资源，右键 → 属性 → 详细信息 里就能看到版本号。"""
     nums = tuple(([int(x) for x in re.findall(r"\d+", VERSION)] + [0, 0, 0, 0])[:4])
     text = """# UTF-8
@@ -50,7 +51,7 @@ VSVersionInfo(
     VarFileInfo([VarStruct('Translation', [2052, 1200])])
   ]
 )
-""" % (nums, nums, AUTHOR, APP_NAME, VERSION, "© " + AUTHOR, NOTICE,
+""" % (nums, nums, AUTHOR, desc, VERSION, "© " + AUTHOR, NOTICE,
        name + ".exe", VERSION)
     p = ROOT / "build" / "version_info.txt"
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -69,50 +70,66 @@ def desktop() -> Path:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-admin", action="store_true", help="不要求管理员权限（测试用）")
+    ap.add_argument("--panel", action="store_true", help="打包「功能面板」而不是钓鱼界面")
     ap.add_argument("--name", default=NAME)
     a = ap.parse_args()
+
+    if a.panel:
+        name = PANEL_NAME
+        desc = "墨迹大侠 · 功能面板"
+        entry = ROOT / "tools" / "gameui.py"
+    else:
+        name = a.name
+        desc = APP_NAME
+        entry = ROOT / "tools" / "fishui.py"
 
     args = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile", "--windowed",
-        "--splash", str(ROOT / "assets" / "splash.png"),
-        "--version-file", str(write_version_file(a.name)),
-        "--name", a.name,
+        "--version-file", str(write_version_file(name, desc)),
+        "--name", name,
         "--paths", str(ROOT),
         "--add-data", "%s;mjd" % (ROOT / "mjd" / "digit_bank.npz"),
         "--add-data", "%s;mjd/templates" % (ROOT / "mjd" / "templates"),
+        "--add-data", "%s;mjd/ground_templates" % (ROOT / "mjd" / "ground_templates"),
         "--hidden-import", "PIL._tkinter_finder",
-        "--hidden-import", "mjd._pubkey",
-        "--hidden-import", "cryptography.hazmat.primitives.asymmetric.ed25519",
-        "--hidden-import", "cryptography.hazmat.primitives.serialization",
-        "--hidden-import", "cryptography.exceptions",
     ]
+    if not a.panel:
+        # 钓鱼界面才需要授权 / 曲线模块；功能面板不碰授权，exe 也小一圈
+        args += [
+            "--splash", str(ROOT / "assets" / "splash.png"),
+            "--hidden-import", "mjd._pubkey",
+            "--hidden-import", "cryptography.hazmat.primitives.asymmetric.ed25519",
+            "--hidden-import", "cryptography.hazmat.primitives.serialization",
+            "--hidden-import", "cryptography.exceptions",
+        ]
     if not a.no_admin:
         args.append("--uac-admin")
-    args.append(str(ROOT / "tools" / "fishui.py"))
+    args.append(str(entry))
 
-    print("正在打包 …（第一次要一两分钟）")
+    print("正在打包 %s …（第一次要一两分钟）" % name)
     subprocess.run(args, cwd=str(ROOT), check=True)
 
-    src = ROOT / "dist" / (a.name + ".exe")
+    src = ROOT / "dist" / (name + ".exe")
     if not src.exists():
         print("打包失败：没生成 %s" % src)
         return 1
-    dst = desktop() / (a.name + ".exe")
+    dst = desktop() / (name + ".exe")
     try:
         shutil.copy2(src, dst)
     except PermissionError:
         print("桌面上的 %s 正在运行，文件被占用，覆盖不了。" % dst.name)
-        print("先把那个窗口关掉，再跑一次 python tools/build_exe.py")
+        print("先把那个窗口关掉，再跑一次 python tools/build_exe.py --panel")
         return 1
     print("已生成：%s  (%.1f MB)" % (dst, dst.stat().st_size / 1024 / 1024))
 
-    # 本机授权也一起放好（只有本机的 license.key 才会通过校验）
-    lic_src = ROOT / "license.key"
-    lic_dst = dst.parent / "license.key"
-    if lic_src.exists() and not lic_dst.exists():
-        shutil.copy2(lic_src, lic_dst)
-        print("已放好本机授权：%s" % lic_dst)
+    if not a.panel:
+        # 本机授权也一起放好（只有本机的 license.key 才会通过校验）
+        lic_src = ROOT / "license.key"
+        lic_dst = dst.parent / "license.key"
+        if lic_src.exists() and not lic_dst.exists():
+            shutil.copy2(lic_src, lic_dst)
+            print("已放好本机授权：%s" % lic_dst)
     return 0
 
 
